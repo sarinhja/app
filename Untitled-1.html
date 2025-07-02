@@ -1,0 +1,1549 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Detector de Caras Real con face-api.js</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #000000;
+            color: white;
+        }
+        
+        h1 {
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        
+        .video-container {
+            position: relative;
+            display: flex;
+            justify-content: center;
+            margin-bottom: 10px;
+            width: 100%;     /* Para que ocupe todo el ancho posible */
+        }
+        
+        #video {
+            max-width: 100%;
+            height: auto;
+            background: #000;
+            transform: scaleX(-1);
+        }
+        
+        #canvas {
+            border-radius: 15px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            max-width: 100%;
+            height: auto;
+            background: #000;
+            display: none;
+            transform: scaleX(-1);
+        }
+        
+        .controls {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .slider-container {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        
+        .slider-container label {
+            font-weight: bold;
+            min-width: 120px;
+        }
+        
+        .slider {
+            flex: 1;
+            height: 8px;
+            border-radius: 4px;
+            background: rgba(153, 16, 16, 0.3);
+            outline: none;
+            -webkit-appearance: none;
+        }
+        
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #4CAF50;
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        }
+        
+        .slider-value {
+            font-weight: bold;
+            min-width: 80px;
+            text-align: center;
+            background: rgba(255, 255, 255, 0.2);
+            padding: 5px 10px;
+            border-radius: 8px;
+        }
+        
+        .status {
+            padding: 10px;
+            border-radius: 8px;
+            text-align: center;
+            font-weight: bold;
+            margin-bottom: 15px;
+        }
+        
+        .status.loading {
+            background: rgba(255, 193, 7, 0.3);
+            border: 2px solid #ffc107;
+        }
+        
+        .status.success {
+            background: rgba(76, 175, 80, 0.3);
+            border: 2px solid #4CAF50;
+        }
+        
+        .status.error {
+            background: rgba(244, 67, 54, 0.3);
+            border: 2px solid #f44336;
+        }
+        
+        .button-container {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        
+        button {
+            background: linear-gradient(45deg, #ff6b6b, #ee5a24);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 25px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            transition: transform 0.2s;
+            margin: 0 10px;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+        }
+        
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .loading-spinner {
+            border: 3px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top: 3px solid #4CAF50;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            margin-right: 10px;
+        }
+
+        .lip-slider {
+            background: linear-gradient(45deg, #ff6b9d, #c44569);
+        }
+
+        .lip-slider::-webkit-slider-thumb {
+            background: #ff6b9d;
+        }
+
+        /* Ocultar la página de cámara cuando se muestra galería */
+        .camera-page.hidden {
+            display: none;
+        }
+
+        /* Página de galería completa */
+        .gallery-page {
+            display: none;
+            min-height: 100vh;
+            background: #fafafa;
+            padding: 0;
+        }
+
+        .gallery-page.active {
+            display: block;
+        }
+
+        /* Header de la galería */
+        .gallery-header {
+            background: white;
+            padding: 15px 20px;
+            border-bottom: 1px solid #dbdbdb;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .back-btn {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #262626;
+        }
+
+        /* Grid de fotos estilo Instagram */
+        .gallery-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 2px;
+            padding: 0;
+            background: white;
+        }
+
+        .gallery-item {
+            position: relative;
+            aspect-ratio: 1;
+            cursor: pointer;
+            overflow: hidden;
+        }
+
+        .gallery-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.2s;
+        }
+
+        .gallery-item:hover img {
+            transform: scale(1.05);
+        }
+
+        /* Modal para ver foto completa */
+        .photo-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.9);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .photo-modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            position: relative;
+            max-width: 90%;
+            max-height: 90%;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .modal-image {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .modal-actions {
+            display: flex;
+            padding: 15px;
+            gap: 10px;
+            background: white;
+        }
+
+        .modal-btn {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.2s;
+        }
+
+        .download-btn {
+            background: #0095f6;
+            color: white;
+        }
+
+        .download-btn:hover {
+            background: #0077cc;
+        }
+
+        .delete-btn {
+            background: #ed4956;
+            color: white;
+        }
+
+        .delete-btn:hover {
+            background: #c42d39;
+        }
+
+        .close-modal {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.5);
+            color: white;
+            border: none;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 18px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+    </style>
+</head>
+<body>
+   <div class="camera-page">
+        <h1>👁️ Detector de Caras con Ojos Grandes</h1>
+        
+        <div id="status" class="status loading">
+            <div class="loading-spinner"></div>
+            Verificando librerías...
+        </div>
+        
+        <div class="video-container">
+            <video id="video" width="640" height="480" autoplay muted playsinline></video>
+            <canvas id="canvas" width="640" height="480"></canvas>
+        </div>
+        
+        <div class="controls">
+            
+        <div class="slider-container">
+            <label for="eyeSlider">Tamaño ojos:</label>
+            <input type="range" id="eyeSlider" class="slider" min="1" max="2.5" step="0.01" value="1">
+            <span id="eyeValue" class="slider-value">x1.0</span>
+        </div>
+
+            <div class="slider-container">
+                <label for="lipSlider">Tamaño labios:</label>
+                <input type="range" id="lipSlider" class="slider lip-slider" min="1" max="2.5" step="0.1" value="1">
+                <span id="lipValue" class="slider-value">x1.0</span>
+            </div>
+        </div>
+
+        <div class="button-container">
+            <button onclick="takeSnapshot()" id="snapBtn">📸 Tomar Foto</button>
+           <button onclick="showGallery()">📷 Ver Galería</button>
+            <button onclick="startWithoutAI()" id="noAIBtn" class="retry-button" style="display: none;">📹 Usar Solo Cámara</button>
+        </div>
+    </div> 
+    <div class="container">
+      <!-- Página de galería (nueva estructura) -->
+        <div class="gallery-page" id="galleryPage">
+            <div class="gallery-header">
+                <button class="back-btn" onclick="closeGallery()">←</button>
+                <h2>Galería</h2>
+                <span id="photoCount">0 fotos</span>
+            </div>
+            <div class="gallery-grid" id="galleryGrid">
+                <!-- Las fotos se añadirán aquí dinámicamente -->
+            </div>
+        </div>
+
+        <!-- Modal para ver foto completa -->
+        <div class="photo-modal" id="photoModal">
+            <div class="modal-content">
+                <button class="close-modal" onclick="closePhotoModal()">×</button>
+                <img class="modal-image" id="modalImage" src="" alt="Foto">
+                <div class="modal-actions">
+                    <button class="modal-btn download-btn" onclick="downloadCurrentPhoto()">📥 Descargar</button>
+                    <button class="modal-btn delete-btn" onclick="deleteCurrentPhoto()">🗑️ Eliminar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const eyeSlider = document.getElementById('eyeSlider');
+        const eyeValue = document.getElementById('eyeValue');
+        const statusDiv = document.getElementById('status');
+        const snapBtn = document.getElementById('snapBtn');
+        const lipSlider = document.getElementById('lipSlider');
+        const lipValue = document.getElementById('lipValue');
+
+        let faceApiLoaded = false;
+        let modelsLoaded = false;
+        let cameraActive = false;
+        let effectActive = false;
+        let stream = null;
+        let animationId = null;
+        let currentModel = 'tiny';
+        let detectedFaces = [];
+        let isProcessing = false;
+        let loadAttempts = 0;
+        const maxLoadAttempts = 3;
+        let lastDetectionTime = 0;
+        const detectionInterval = 100; // Detectar cada 200ms para evitar lag
+        let lastVideoWidth = 0;
+        let lastVideoHeight = 0;
+        let renderLoopActive = false;
+        let detectionLoopActive = false;
+        let showDebugInfo = false;
+        let previousDetections = [];
+        let photoGallery = []; // Array para almacenar las fotos
+        let currentPhotoIndex = -1;
+
+
+function checkVideoResize() {
+    if (video.videoWidth !== lastVideoWidth || video.videoHeight !== lastVideoHeight) {
+        lastVideoWidth = video.videoWidth;
+        lastVideoHeight = video.videoHeight;
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        return true;
+    }
+    return false;
+}
+
+
+        // Función principal de renderizado optimizada
+       // Modificar renderFrame() para añadir un contador visual
+function renderFrame() {
+    if (effectActive) {
+        animationId = requestAnimationFrame(renderFrame);
+    }
+    
+    if (!cameraActive || !video.videoWidth || video.readyState < 2) {
+        return;
+    }
+    
+    try {
+        if (video.paused || video.ended) {
+            video.play().catch(e => console.warn('Error reproduciendo video:', e));
+        }
+        
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        
+        // Resetear filtros
+        ctx.filter = 'none';
+        
+        // Dibujar el video original
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        
+        // Aplicar efectos solo si hay caras detectadas
+        if (detectedFaces && detectedFaces.length > 0) {
+            detectedFaces.forEach(detection => {
+                // Después aplicar efectos de ojos y labios encima
+                drawEnlargedEyes(detection);
+            });
+        }
+        
+        // Asegurar que los filtros se reseteen
+        ctx.filter = 'none';
+        
+    } catch (error) {
+        console.warn('Error en renderFrame:', error);
+    }
+}
+
+function startRenderLoop() {
+    if (animationId) {
+        cancelAnimationFrame(animationId);
+    }
+    
+    if (effectActive) {
+        renderFrame(); // Inicia el bucle
+    }
+}
+
+        // Función para agrandar un ojo individual
+function enlargeEyeProportional(eyePoints, scale, faceWidth, faceHeight) {
+    if (!eyePoints || eyePoints.length < 6) return;
+
+    try {
+        const centerX = eyePoints.reduce((sum, p) => sum + (p.x || 0), 0) / eyePoints.length;
+        const centerY = eyePoints.reduce((sum, p) => sum + (p.y || 0), 0) / eyePoints.length;
+
+        if (!centerX || !centerY || centerX < 0 || centerY < 0 ||
+            centerX > canvas.width || centerY > canvas.height) {
+            return;
+        }
+
+        const validPoints = eyePoints.filter(p => p.x && p.y);
+        if (validPoints.length < 4) return;
+
+        const minX = Math.min(...validPoints.map(p => p.x));
+        const maxX = Math.max(...validPoints.map(p => p.x));
+        const minY = Math.min(...validPoints.map(p => p.y));
+        const maxY = Math.max(...validPoints.map(p => p.y));
+
+        const originalEyeWidth = maxX - minX;
+        const originalEyeHeight = maxY - minY;
+
+        if (originalEyeWidth < 10 || originalEyeHeight < 5) return;
+
+        // CAMBIO: Si scale es 1.0, solo dibujar el ojo original sin modificaciones
+        if (scale === 1.0) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.moveTo(validPoints[0].x, validPoints[0].y);
+            for (let i = 1; i < validPoints.length; i++) {
+                const currentPoint = validPoints[i];
+                const nextPoint = validPoints[(i + 1) % validPoints.length];
+                const controlX = (currentPoint.x + nextPoint.x) / 2;
+                const controlY = (currentPoint.y + nextPoint.y) / 2;
+                ctx.quadraticCurveTo(currentPoint.x, currentPoint.y, controlX, controlY);
+            }
+            ctx.closePath();
+            ctx.clip();
+
+            ctx.drawImage(
+                video,
+                minX, minY, originalEyeWidth, originalEyeHeight,
+                minX, minY, originalEyeWidth, originalEyeHeight
+            );
+            ctx.restore();
+            return; // Salir temprano para escala 1.0
+        }
+
+        const horizontalScale = scale;
+        const verticalScale = scale * 1.5;
+
+        // Resto del código existente para scale > 1.0...
+        // [El resto de la función permanece igual]
+        
+        // Dibujo original
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(validPoints[0].x, validPoints[0].y);
+        for (let i = 1; i < validPoints.length; i++) {
+            const currentPoint = validPoints[i];
+            const nextPoint = validPoints[(i + 1) % validPoints.length];
+            const controlX = (currentPoint.x + nextPoint.x) / 2;
+            const controlY = (currentPoint.y + nextPoint.y) / 2;
+            ctx.quadraticCurveTo(currentPoint.x, currentPoint.y, controlX, controlY);
+        }
+        ctx.closePath();
+        ctx.clip();
+
+        ctx.drawImage(
+            video,
+            minX, minY, originalEyeWidth, originalEyeHeight,
+            minX, minY, originalEyeWidth, originalEyeHeight
+        );
+        ctx.restore();
+
+        // Solo aplicar capas adicionales si scale > 1
+        const horizontalGrowth = horizontalScale - 1;
+        const verticalGrowth = verticalScale - 1;
+        const numLayers = Math.min(Math.floor(Math.max(horizontalGrowth, verticalGrowth) * 10), 8);
+
+        for (let layer = 1; layer <= numLayers; layer++) {
+            const layerHorizontalScale = 1 + (horizontalGrowth * layer / numLayers);
+            const layerVerticalScale = 1 + (verticalGrowth * layer / numLayers);
+            const layerOpacity = Math.max(0.1, 1 - (layer / numLayers) * 0.7);
+
+            ctx.save();
+            ctx.globalAlpha = layerOpacity;
+
+            const expandedPoints = validPoints.map(point => ({
+                x: centerX + (point.x - centerX) * layerHorizontalScale,
+                y: centerY + (point.y - centerY) * layerVerticalScale
+            }));
+
+            ctx.beginPath();
+            ctx.moveTo(expandedPoints[0].x, expandedPoints[0].y);
+            for (let i = 1; i < expandedPoints.length; i++) {
+                const currentPoint = expandedPoints[i];
+                const nextPoint = expandedPoints[(i + 1) % expandedPoints.length];
+                const controlX = (currentPoint.x + nextPoint.x) / 2;
+                const controlY = (currentPoint.y + nextPoint.y) / 2;
+                ctx.quadraticCurveTo(currentPoint.x, currentPoint.y, controlX, controlY);
+            }
+            ctx.closePath();
+            ctx.clip();
+
+            const layerWidth = originalEyeWidth * layerHorizontalScale;
+            const layerHeight = originalEyeHeight * layerVerticalScale;
+
+            const sourceExpansion = layer * 2;
+            const sourceX = Math.max(0, minX - sourceExpansion);
+            const sourceY = Math.max(0, minY - sourceExpansion);
+            const sourceWidth = Math.min(originalEyeWidth + sourceExpansion * 2, video.videoWidth - sourceX);
+            const sourceHeight = Math.min(originalEyeHeight + sourceExpansion * 2, video.videoHeight - sourceY);
+
+            ctx.drawImage(
+                video,
+                sourceX, sourceY, sourceWidth, sourceHeight,
+                centerX - layerWidth * 0.5, centerY - layerHeight * 0.5,
+                layerWidth, layerHeight
+            );
+
+            ctx.restore();
+        }
+
+        // Aplicar suavizado solo si scale > 1
+        const smoothLevel = parseInt(smoothSlider?.value || "0");
+        if (smoothLevel > 0) {
+            const finalWidth = originalEyeWidth * horizontalScale;
+            const finalHeight = originalEyeHeight * verticalScale;
+
+            applyEdgeSmoothing(
+                validPoints,
+                centerX,
+                centerY,
+                finalWidth,
+                finalHeight,
+                smoothLevel * 0.3
+            );
+        }
+
+    } catch (error) {
+        console.warn('Error dibujando ojo expandido:', error);
+    }
+}
+
+
+
+        // Función de detección optimizada
+      async function detectFaces() {
+    // No verificar timing aquí, dejar que se ejecute más libremente
+    if (isProcessing || !effectActive || !cameraActive || !modelsLoaded) return;
+    
+    // Verificar que el video está disponible
+    if (!video.videoWidth || video.readyState < 2 || video.paused) {
+        return;
+    }
+            
+    isProcessing = true;
+    
+    try {
+        const minConfidence = 0.5;
+        // Detectar caras con landmarks
+        const detections = await faceapi.detectAllFaces(video, 
+            new faceapi.TinyFaceDetectorOptions({ 
+                inputSize: 160,
+                scoreThreshold: minConfidence 
+            })
+        ).withFaceLandmarks(true);
+        
+        // Actualizar detecciones
+        detectedFaces = detections;
+        
+    } catch (error) {
+        console.warn('Error en detección:', error);
+        // No limpiar detecciones en caso de error menor
+    }
+    
+    isProcessing = false;
+    const detections = await faceapi.detectAllFaces(video, options).withFaceLandmarks(true);
+    
+    // Añadir timestamp para interpolación
+    detectedFaces = detections.map(detection => ({
+        ...detection,
+        timestamp: performance.now()
+    }));
+}
+        // Función para detección continua
+      function startDetectionLoop() {
+    if (!effectActive) return;
+    
+    // Ejecutar detección inmediatamente
+    detectFaces();
+    
+    // Programar siguiente detección
+   setTimeout(() => {
+    if (effectActive) {
+        startDetectionLoop();
+    }
+}, 33); // Más frecuente: cada 80ms
+}
+
+
+        function updateStatus(message, type) {
+            statusDiv.className = `status ${type}`;
+            if (type === 'loading') {
+                statusDiv.innerHTML = `<div class="loading-spinner"></div>${message}`;
+            } else {
+                statusDiv.textContent = message;
+            }
+            log(message, type);
+        }
+
+       function updateSliders() {
+    const rawValue = parseFloat(eyeSlider.value);
+
+    // Transformació per fer que creixi més ràpid (efecte perceptible)
+    let transformedValue = 1;
+    if (rawValue < 1.5) {
+        transformedValue = 1;
+    } else if (rawValue < 2.3) {
+        transformedValue = 2;
+    } else {
+        transformedValue = 3;
+    }
+
+    eyeValue.textContent = `x${parseFloat(eyeSlider.value).toFixed(1)}`;
+
+    
+    // Guardar la versió "modificada"
+    eyeSlider.dataset.effectiveValue = transformedValue;
+
+    lipValue.textContent = `x${lipSlider.value}`;
+
+    if (!effectActive && cameraActive) {
+        effectActive = true;
+        video.style.display = 'none';
+        canvas.style.display = 'block';
+        detectedFaces = [];
+        isProcessing = false;
+        startRenderLoop();
+        startDetectionLoop();
+    }
+}
+
+
+
+// 5. MODIFICAR drawEnlargedEyes() para incluir labios -->
+function drawEnlargedEyes(detection) {
+    if (!detection || !detection.landmarks) {
+        return;
+    }
+    
+    const landmarks = detection.landmarks;
+    const rawEyeScale = parseFloat(eyeSlider.value);
+    const eyeScale = 1 + (rawEyeScale - 1) * 1.5; // Amplifica el creixement
+    const lipScale = parseFloat(lipSlider.value); // AÑADIR ESTA LÍNEA
+    
+    try {
+        const leftEye = landmarks.getLeftEye();
+        const rightEye = landmarks.getRightEye();
+        const mouth = landmarks.getMouth(); // AÑADIR ESTA LÍNEA
+        
+        // Calcular el tamaño de la cara para proporcionalidad
+        const faceBox = detection.detection.box;
+        const faceWidth = faceBox.width;
+        const faceHeight = faceBox.height;
+        
+        // Procesar ojos (código existente)
+        if (leftEye && rightEye && leftEye.length >= 6 && rightEye.length >= 6 && eyeScale > 1) {
+            enlargeEyeProportional(leftEye, eyeScale, faceWidth, faceHeight);
+            enlargeEyeProportional(rightEye, eyeScale, faceWidth, faceHeight);
+        }
+        
+        // AÑADIR: Procesar labios
+        if (mouth && mouth.length >= 12 && lipScale > 1) {
+            enlargeLipsProportional(mouth, lipScale, faceWidth, faceHeight);
+        }
+        
+    } catch (error) {
+        console.warn('Error en drawEnlargedEyes:', error);
+    }
+}
+
+      function enlargeLipsProportional(mouthPoints, scale, faceWidth, faceHeight) {
+    if (!mouthPoints || mouthPoints.length < 12) return;
+
+    try {
+        const clampedScale = Math.min(scale, 1.5);
+
+        const centerX = mouthPoints.reduce((sum, p) => sum + (p.x || 0), 0) / mouthPoints.length;
+        const centerY = mouthPoints.reduce((sum, p) => sum + (p.y || 0), 0) / mouthPoints.length;
+
+        if (!centerX || !centerY || centerX < 0 || centerY < 0 ||
+            centerX > canvas.width || centerY > canvas.height) {
+            return;
+        }
+
+        const validPoints = mouthPoints.filter(p => p.x && p.y);
+        if (validPoints.length < 8) return;
+
+        const minX = Math.min(...validPoints.map(p => p.x));
+        const maxX = Math.max(...validPoints.map(p => p.x));
+        const minY = Math.min(...validPoints.map(p => p.y));
+        const maxY = Math.max(...validPoints.map(p => p.y));
+
+        const originalMouthWidth = maxX - minX;
+        const originalMouthHeight = maxY - minY;
+
+        if (originalMouthWidth < 15 || originalMouthHeight < 8) return;
+
+        const horizontalScale = clampedScale * 1.1;
+        const verticalScale = clampedScale * 1.4;
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(validPoints[0].x, validPoints[0].y);
+        for (let i = 1; i < validPoints.length; i++) {
+            const currentPoint = validPoints[i];
+            const nextPoint = validPoints[(i + 1) % validPoints.length];
+            const controlX = (currentPoint.x + nextPoint.x) / 2;
+            const controlY = (currentPoint.y + nextPoint.y) / 2;
+            ctx.quadraticCurveTo(currentPoint.x, currentPoint.y, controlX, controlY);
+        }
+        ctx.closePath();
+        ctx.clip();
+
+        ctx.drawImage(
+            video,
+            minX, minY, originalMouthWidth, originalMouthHeight,
+            minX, minY, originalMouthWidth, originalMouthHeight
+        );
+        ctx.restore();
+
+        if (clampedScale > 1) {
+            const horizontalGrowth = horizontalScale - 1;
+            const verticalGrowth = verticalScale - 1;
+            const numLayers = Math.min(Math.floor(Math.max(horizontalGrowth, verticalGrowth) * 8), 6);
+
+            for (let layer = 1; layer <= numLayers; layer++) {
+                const layerHorizontalScale = 1 + (horizontalGrowth * layer / numLayers);
+                const layerVerticalScale = 1 + (verticalGrowth * layer / numLayers);
+                const layerOpacity = Math.max(0.15, 1 - (layer / numLayers) * 0.6);
+
+                ctx.save();
+                ctx.globalAlpha = layerOpacity;
+
+                const expandedPoints = validPoints.map(point => ({
+                    x: centerX + (point.x - centerX) * layerHorizontalScale,
+                    y: centerY + (point.y - centerY) * layerVerticalScale
+                }));
+
+                ctx.beginPath();
+                ctx.moveTo(expandedPoints[0].x, expandedPoints[0].y);
+                for (let i = 1; i < expandedPoints.length; i++) {
+                    const currentPoint = expandedPoints[i];
+                    const nextPoint = expandedPoints[(i + 1) % expandedPoints.length];
+                    const controlX = (currentPoint.x + nextPoint.x) / 2;
+                    const controlY = (currentPoint.y + nextPoint.y) / 2;
+                    ctx.quadraticCurveTo(currentPoint.x, currentPoint.y, controlX, controlY);
+                }
+                ctx.closePath();
+                ctx.clip();
+
+                const layerWidth = originalMouthWidth * layerHorizontalScale;
+                const layerHeight = originalMouthHeight * layerVerticalScale;
+
+                const sourceExpansion = Math.min(layer * 2, 6);
+                const sourceX = Math.max(0, minX - sourceExpansion);
+                const sourceY = Math.max(0, minY - sourceExpansion);
+                const sourceWidth = Math.min(originalMouthWidth + sourceExpansion * 2, video.videoWidth - sourceX);
+                const sourceHeight = Math.min(originalMouthHeight + sourceExpansion * 2, video.videoHeight - sourceY);
+
+                ctx.imageSmoothingEnabled = true;
+                ctx.imageSmoothingQuality = 'high';
+
+                ctx.drawImage(
+                    video,
+                    sourceX, sourceY, sourceWidth, sourceHeight,
+                    centerX - layerWidth * 0.5, centerY - layerHeight * 0.5,
+                    layerWidth, layerHeight
+                );
+
+                ctx.restore();
+            }
+        }
+
+        if (clampedScale > 1.1) {
+            ctx.save();
+            ctx.globalAlpha = Math.min(0.2, (clampedScale - 1) * 0.4);
+            ctx.globalCompositeOperation = 'overlay';
+
+            const finalHorizontalScale = horizontalScale;
+            const finalVerticalScale = verticalScale;
+            const finalWidth = originalMouthWidth * finalHorizontalScale;
+            const finalHeight = originalMouthHeight * finalVerticalScale;
+
+            const brightGradient = ctx.createRadialGradient(
+                centerX, centerY - finalHeight * 0.15, 0,
+                centerX, centerY, Math.max(finalWidth, finalHeight) * 0.4
+            );
+            brightGradient.addColorStop(0, 'rgba(255, 245, 240, 0.8)');
+            brightGradient.addColorStop(0.6, 'rgba(255, 235, 225, 0.3)');
+            brightGradient.addColorStop(1, 'rgba(255, 235, 225, 0)');
+
+            ctx.fillStyle = brightGradient;
+
+            const finalExpandedPoints = validPoints.map(point => ({
+                x: centerX + (point.x - centerX) * finalHorizontalScale,
+                y: centerY + (point.y - centerY) * finalVerticalScale
+            }));
+
+            ctx.beginPath();
+            ctx.moveTo(finalExpandedPoints[0].x, finalExpandedPoints[0].y);
+            for (let i = 1; i < finalExpandedPoints.length; i++) {
+                const currentPoint = finalExpandedPoints[i];
+                const nextPoint = finalExpandedPoints[(i + 1) % finalExpandedPoints.length];
+                const controlX = (currentPoint.x + nextPoint.x) / 2;
+                const controlY = (currentPoint.y + nextPoint.y) / 2;
+                ctx.quadraticCurveTo(currentPoint.x, currentPoint.y, controlX, controlY);
+            }
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+        }
+
+        // ✅ NOVETAT: Aplicar suavitzat al FINAL, abans del catch
+        if (clampedScale > 1) {
+            const smoothLevel = parseInt(smoothSlider?.value || "0");
+            if (smoothLevel > 0) {
+                const finalWidth = originalMouthWidth * horizontalScale;
+                const finalHeight = originalMouthHeight * verticalScale;
+
+                applyEdgeSmoothing(
+                    validPoints,
+                    centerX,
+                    centerY,
+                    finalWidth,
+                    finalHeight,
+                    smoothLevel * 0.4 // més intens que als ulls
+                );
+            }
+        }
+
+    } catch (error) {
+        console.warn('Error dibujando labios gorditos:', error);
+    }
+}
+
+
+       function toggleEffect() {
+    if (!faceApiLoaded || !modelsLoaded) {
+        log('IA no está cargada', 'warning');
+        updateStatus('❌ Primero debe cargar la IA', 'error');
+        return;
+    }
+
+    if (!cameraActive) {
+        log('Cámara no activa', 'warning');
+        updateStatus('❌ Primero activa la cámara', 'error');
+        return;
+    }
+
+    effectActive = !effectActive;
+    
+    if (effectActive) {
+        video.style.display = 'none';
+        canvas.style.display = 'block';
+        
+        // Limpiar estado anterior
+        detectedFaces = [];
+        isProcessing = false;
+        
+        // INICIAR AMBOS BUCLES DE FORMA INDEPENDIENTE
+        startRenderLoop();     // Bucle de dibujo a 60fps
+        startDetectionLoop();  // Bucle de detección a ~12fps
+        
+    } else {
+        video.style.display = 'block';
+        canvas.style.display = 'none';
+        
+        // Limpiar todo
+        detectedFaces = [];
+        isProcessing = false;
+        
+        if (animationId) {
+            cancelAnimationFrame(animationId);
+            animationId = null;
+        }
+    }
+
+    if (effectActive) {
+          if (effectActive) {
+        // Ocultar video pero mantenerlo activo
+        video.style.display = 'none';    // ✅ Ocultar visualmente
+        canvas.style.display = 'block';  // ✅ Mostrar canvas con efecto
+        
+        // IMPORTANTE: Forzar que siga reproduciéndose aunque esté oculto
+        if (video.paused) {
+            video.play();
+        }
+    
+         } else {
+        video.style.display = 'block';   // ✅ Mostrar video normal
+        canvas.style.display = 'none';   // ✅ Ocultar canvas
+    updateSliders();
+    
+}
+}
+}
+
+        async function loadFaceApiScript() {
+    return new Promise((resolve, reject) => {
+        if (typeof faceapi !== 'undefined') {
+            resolve();
+            return;
+        }
+
+        // Timeout de 15 segundos
+        const timeout = setTimeout(() => {
+            reject(new Error('Timeout cargando face-api.js'));
+        }, 15000);
+
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js';
+        
+        script.onload = () => {
+            clearTimeout(timeout);
+            resolve();
+        };
+        
+        script.onerror = () => {
+            clearTimeout(timeout);
+            reject(new Error('Error cargando face-api.js'));
+        };
+        
+        document.head.appendChild(script);
+    });
+}
+
+       async function loadModels() {
+    try { 
+        // Intentar desde CDN público primero
+        const MODEL_URLS = [
+            'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.13/model/',
+            'https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights/',
+            './models'
+        ];
+        
+        let modelsLoadedSuccessfully = false;
+        
+        for (const MODEL_URL of MODEL_URLS) {
+            try {
+                await Promise.all([
+                    faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+                    faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL)
+                ]);
+                
+                modelsLoadedSuccessfully = true;
+                break;
+                
+            } catch (urlError) {
+                log(`Error con ${MODEL_URL}: ${urlError.message}`, 'warning');
+                continue;
+            }
+        }
+        
+        if (!modelsLoadedSuccessfully) {
+            throw new Error('No se pudieron cargar los modelos desde ninguna URL');
+        }
+        
+        modelsLoaded = true;
+        
+        
+    } catch (error) {
+        log(`Error cargando modelos: ${error.message}`, 'error');
+        updateStatus(`❌ Error cargando IA: ${error.message}`, 'error');
+        showFallbackOptions();
+    }
+}
+
+       async function initializeFaceApi() {
+    loadAttempts++;
+    
+    try {
+        const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Timeout de inicialización')), 20000)
+        );
+        
+        await Promise.race([loadFaceApiScript(), timeoutPromise]);
+
+        if (typeof faceapi === 'undefined') {
+            throw new Error('face-api.js no se cargó correctamente');
+        }
+
+        faceApiLoaded = true;
+
+        await loadModels();
+
+        // 🔥 Aquí actives la càmera automàticament
+        await startCamera();
+
+    } catch (error) {
+        log(`Error inicializando: ${error.message}`, 'error');
+        updateStatus('❌ Error cargando IA. Usar "Solo Cámara" o "Reintentar"', 'error');
+        showFallbackOptions();
+    }
+}
+
+
+function applyNaturalBlending(featurePoints, centerX, centerY, width, height) {
+    try {
+        ctx.save();
+        
+        // Crear máscara para el área de transición
+        const transitionPoints = featurePoints.map(point => ({
+            x: centerX + (point.x - centerX) * 1.05, // 5% más grande
+            y: centerY + (point.y - centerY) * 1.05
+        }));
+        
+        ctx.beginPath();
+        ctx.moveTo(transitionPoints[0].x, transitionPoints[0].y);
+        for (let i = 1; i < transitionPoints.length; i++) {
+            const current = transitionPoints[i];
+            const next = transitionPoints[(i + 1) % transitionPoints.length];
+            const controlX = (current.x + next.x) / 2;
+            const controlY = (current.y + next.y) / 2;
+            ctx.quadraticCurveTo(current.x, current.y, controlX, controlY);
+        }
+        ctx.closePath();
+        ctx.clip();
+        
+        // Aplicar un blend suave
+        ctx.globalCompositeOperation = 'multiply';
+        ctx.globalAlpha = 0.1;
+        ctx.filter = 'blur(1px)';
+        
+        ctx.drawImage(
+            video,
+            centerX - width * 0.6, centerY - height * 0.6,
+            width * 1.2, height * 1.2,
+            centerX - width * 0.6, centerY - height * 0.6,
+            width * 1.2, height * 1.2
+        );
+        
+        ctx.restore();
+        
+    } catch (error) {
+        console.warn('Error en blend natural:', error);
+    }
+}
+
+    function showFallbackOptions() {
+    document.getElementById('noAIBtn').style.display = 'inline-block';
+}
+    
+       async function startCamera() {
+    try {
+        updateStatus('Solicitando acceso a la cámara...', 'loading');
+        
+        if (stream) {
+            stream.getTracks().forEach(track => track.stop());
+        }
+        
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            throw new Error('getUserMedia no está soportado');
+        }
+        
+        stream = await navigator.mediaDevices.getUserMedia({
+            video: {
+                width: { ideal: 640 },
+                height: { ideal: 480 },
+                facingMode: 'user'
+            }
+        });
+        
+        video.srcObject = stream;
+        
+        await new Promise((resolve, reject) => {
+            video.onloadedmetadata = () => {
+                // Verificar que tenemos dimensiones válidas
+                if (!video.videoWidth || !video.videoHeight) {
+                    reject(new Error('Video sin dimensiones válidas'));
+                    return;
+                }
+                
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                
+                resolve();
+            };
+            video.onerror = reject;
+            setTimeout(() => reject(new Error('Timeout cargando video')), 10000);
+        });
+        
+        cameraActive = true;
+        
+        snapBtn.disabled = false;
+        
+        if (faceApiLoaded && modelsLoaded) {
+            updateStatus('', 'info');
+        }
+        
+    } catch (error) {
+        log(`Error activando cámara: ${error.message}`, 'error');
+        updateStatus(`❌ Error con la cámara: ${error.message}`, 'error');
+        if (error.name === 'NotAllowedError') {
+            updateStatus('❌ Acceso a cámara denegado. Permite el acceso y recarga.', 'error');
+        } else if (error.name === 'NotFoundError') {
+            updateStatus('❌ No se encontró cámara disponible', 'error');
+        } else if (error.name === 'NotSupportedError') {
+            updateStatus('❌ Cámara no soportada en este navegador', 'error');
+        }
+    }
+}
+
+       function stopCamera() {
+           try {
+               if (effectActive) {
+                   toggleEffect();
+               }
+               
+               if (stream) {
+                   stream.getTracks().forEach(track => {
+                       track.stop();
+                       log(`Track ${track.kind} detenido`, 'info');
+                   });
+                   stream = null;
+               }
+               
+               video.srcObject = null;
+               cameraActive = false;
+               
+               snapBtn.disabled = true;
+               
+               log('Cámara detenida', 'success');
+               updateStatus('📹 Cámara detenida. Presiona "Activar Cámara" para reiniciar', 'info');
+               
+           } catch (error) {
+               log(`Error deteniendo cámara: ${error.message}`, 'error');
+           }
+       }
+
+       function pixelateFace(ctx, faceBox, pixelSize = 15) {
+    const { x, y, width, height } = faceBox;
+    
+    // Asegurar que las coordenadas están dentro del canvas
+    const canvasWidth = ctx.canvas.width;
+    const canvasHeight = ctx.canvas.height;
+    
+    const clampedX = Math.max(0, Math.min(x, canvasWidth));
+    const clampedY = Math.max(0, Math.min(y, canvasHeight));
+    const clampedWidth = Math.min(width, canvasWidth - clampedX);
+    const clampedHeight = Math.min(height, canvasHeight - clampedY);
+    
+    console.log(`Pixelating face at: x=${clampedX}, y=${clampedY}, w=${clampedWidth}, h=${clampedHeight}`);
+    
+    if (clampedWidth <= 0 || clampedHeight <= 0) {
+        console.log('Invalid face dimensions, skipping pixelation');
+        return;
+    }
+
+    const pxW = Math.max(1, Math.floor(clampedWidth / pixelSize));
+    const pxH = Math.max(1, Math.floor(clampedHeight / pixelSize));
+
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = pxW;
+    tempCanvas.height = pxH;
+    const tempCtx = tempCanvas.getContext('2d');
+
+    try {
+        // Copiar la cara en pequeño
+        tempCtx.drawImage(ctx.canvas, clampedX, clampedY, clampedWidth, clampedHeight, 0, 0, pxW, pxH);
+
+        // Dibujar de vuelta la cara pixelada en grande
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(tempCanvas, 0, 0, pxW, pxH, clampedX, clampedY, clampedWidth, clampedHeight);
+        ctx.imageSmoothingEnabled = true;
+        
+        console.log('Face pixelated successfully');
+    } catch (error) {
+        console.error('Error pixelating face:', error);
+    }
+}
+
+async function takeSnapshot() {
+    if (!cameraActive) {
+        log('No se puede tomar foto sin cámara', 'warning');
+        return;
+    }
+
+    try {
+        const snapshotCanvas = document.createElement('canvas');
+        const snapshotCtx = snapshotCanvas.getContext('2d');
+
+        snapshotCanvas.width = effectActive ? canvas.width : video.videoWidth;
+        snapshotCanvas.height = effectActive ? canvas.height : video.videoHeight;
+
+        snapshotCtx.save();
+        snapshotCtx.translate(snapshotCanvas.width, 0);
+        snapshotCtx.scale(-1, 1);
+
+        if (effectActive && canvas.style.display !== 'none') {
+            snapshotCtx.drawImage(canvas, 0, 0);
+        } else {
+            snapshotCtx.drawImage(video, 0, 0);
+        }
+
+        snapshotCtx.restore();
+
+        // ✅ Detectar caras manualmente si no hay efecto activo
+        let facesToPixelate = detectedFaces;
+
+        if (!effectActive && typeof faceapi !== 'undefined' && modelsLoaded) {
+            const detections = await faceapi
+                .detectAllFaces(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 160, scoreThreshold: 0.5 }))
+                .withFaceLandmarks(true);
+
+            facesToPixelate = detections;
+        }
+
+        // ✅ Aplicar pixelat si hi ha cares detectades
+        if (facesToPixelate.length > 0) {
+            facesToPixelate.forEach(face => {
+                const box = face.detection.box;
+                pixelateFace(snapshotCtx, box, 10); // Pots ajustar el pixelSize
+            });
+        }
+
+        const imageData = snapshotCanvas.toDataURL('image/png', 0.9);
+        const photo = {
+            id: Date.now(),
+            data: imageData,
+            timestamp: new Date().toLocaleString(),
+            hasEffect: effectActive
+        };
+
+        photoGallery.push(photo);
+        savePhotosToStorage();
+        updatePhotoCounter();
+
+        const originalBg = snapBtn.style.background;
+        snapBtn.style.background = 'linear-gradient(45deg, #4CAF50, #45a049)';
+        snapBtn.textContent = '✅ ¡Guardada!';
+        setTimeout(() => {
+            snapBtn.style.background = originalBg;
+            snapBtn.textContent = '📸 Tomar Foto';
+        }, 1000);
+
+
+    } catch (error) {
+        log(`Error tomando foto: ${error.message}`, 'error');
+    }
+}
+
+
+function handleResize() {
+    if (resizeTimeout) clearTimeout(resizeTimeout);
+    
+    resizeTimeout = setTimeout(() => {
+        if (cameraActive && video.videoWidth && video.videoHeight) {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            log('Canvas redimensionado por cambio de ventana', 'info');
+        }
+    }, 250);
+}
+
+// Guardar fotos en localStorage
+function savePhotosToStorage() {
+    try {
+        localStorage.setItem('cameraPhotos', JSON.stringify(photoGallery));
+        console.log('Fotos guardadas en localStorage');
+    } catch (error) {
+        console.error('Error guardando fotos:', error);
+        log('Error guardando fotos permanentemente', 'error');
+    }
+}
+
+// Cargar fotos desde localStorage
+function loadPhotosFromStorage() {
+    try {
+        const savedPhotos = localStorage.getItem('cameraPhotos');
+        if (savedPhotos) {
+            photoGallery = JSON.parse(savedPhotos);
+            console.log(`${photoGallery.length} fotos cargadas desde localStorage`);
+            updatePhotoCounter();
+        }
+    } catch (error) {
+        console.error('Error cargando fotos:', error);
+        photoGallery = [];
+    }
+}
+
+// Limpiar todas las fotos (función opcional para depuración)
+function clearAllPhotos() {
+    if (confirm('¿Estás seguro de que quieres eliminar todas las fotos permanentemente?')) {
+        photoGallery = [];
+        localStorage.removeItem('cameraPhotos');
+        updatePhotoCounter();
+        renderGallery();
+        log('Todas las fotos eliminadas', 'success');
+    }
+}
+window.addEventListener('resize', handleResize);
+
+       // Event listeners
+       eyeSlider.addEventListener('input', updateSliders);
+       
+       // Cleanup al cerrar página
+       window.addEventListener('beforeunload', () => {
+           if (stream) {
+               stream.getTracks().forEach(track => track.stop());
+           }
+           if (animationId) {
+               cancelAnimationFrame(animationId);
+           }
+       });
+
+       // Manejo de errores de video
+       video.addEventListener('error', (e) => {
+           log(`Error de video: ${e.message || 'Error desconocido'}`, 'error');
+           updateStatus('❌ Error en el stream de video', 'error');
+       });
+
+       // Optimización de rendimiento
+       video.addEventListener('loadeddata', () => {
+           log(`Video cargado: ${video.videoWidth}x${video.videoHeight}`, 'info');
+       });
+
+       // Inicialización
+       updateSliders();
+       
+       // Deshabilitar botones hasta que todo esté listo
+       snapBtn.disabled = true;
+       
+       // Iniciar carga de face-api.js
+       initializeFaceApi();
+
+       // Limpieza automática cada 30 segundos
+setInterval(() => {
+    if (!effectActive && detectedFaces.length > 0) {
+        detectedFaces = [];
+        log('Limpieza automática de detecciones', 'info');
+    }
+})
+
+// Pausar cuando la página no es visible
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+        log('Página oculta - pausando procesamiento', 'info');
+        // No pausar completamente, solo reducir frecuencia
+    } else {
+        log('Página visible - reanudando procesamiento', 'info');
+        if (effectActive) {
+            // Asegurar que los bucles estén funcionando
+            setTimeout(() => {
+                if (!animationId) {
+                    startRenderLoop();
+                }
+            }, 100);
+        }
+    }
+});
+
+
+function startWithoutAI() {
+    faceApiLoaded = false;
+    modelsLoaded = false;
+    cameraBtn.disabled = false;
+    document.getElementById('noAIBtn').style.display = 'none';
+    
+}
+
+function log(message, type = 'info') {
+    console.log(`[${type.toUpperCase()}] ${message}`);
+}
+
+lipSlider.addEventListener('input', updateSliders);
+// Función para mostrar la galería
+function showGallery() {
+    document.querySelector('.camera-page').classList.add('hidden');
+    document.getElementById('galleryPage').classList.add('active');
+    renderGallery();
+}
+
+// Función para cerrar la galería
+function closeGallery() {
+    document.querySelector('.camera-page').classList.remove('hidden');
+    document.getElementById('galleryPage').classList.remove('active');
+}
+
+// Renderizar la galería estilo Instagram
+function renderGallery() {
+    const galleryGrid = document.getElementById('galleryGrid');
+    const photoCount = document.getElementById('photoCount');
+    
+    galleryGrid.innerHTML = '';
+    photoCount.textContent = `${photoGallery.length} fotos`;
+    
+    photoGallery.forEach((photo, index) => {
+        const item = document.createElement('div');
+        item.className = 'gallery-item';
+        item.onclick = () => openPhotoModal(index);
+        
+        const img = document.createElement('img');
+        img.src = photo.data;
+        img.alt = `Foto ${index + 1}`;
+        
+        item.appendChild(img);
+        galleryGrid.appendChild(item);
+    });
+}
+
+// Abrir modal de foto
+function openPhotoModal(index) {
+    currentPhotoIndex = index;
+    const modal = document.getElementById('photoModal');
+    const modalImage = document.getElementById('modalImage');
+    
+    modalImage.src = photoGallery[index].data;
+    modal.classList.add('active');
+}
+
+// Cerrar modal de foto
+function closePhotoModal() {
+    document.getElementById('photoModal').classList.remove('active');
+    currentPhotoIndex = -1;
+}
+
+// Descargar foto actual
+function downloadCurrentPhoto() {
+    if (currentPhotoIndex >= 0) {
+        const photo = photoGallery[currentPhotoIndex];
+        const link = document.createElement('a');
+        link.download = `foto_${photo.timestamp.replace(/[/:]/g, '-')}.png`;
+        link.href = photo.data;
+        link.click();
+        log('Foto descargada', 'success');
+    }
+}
+
+// Eliminar foto actual
+function deleteCurrentPhoto() {
+    if (currentPhotoIndex >= 0) {
+        photoGallery.splice(currentPhotoIndex, 1);
+        savePhotosToStorage(); // ← Nueva línea
+        closePhotoModal();
+        renderGallery();
+        updatePhotoCounter();
+        log('Foto eliminada permanentemente', 'success');
+    }
+}
+
+// Actualizar contador de fotos
+function updatePhotoCounter() {
+    const counter = document.getElementById('photoCount');
+    if (counter) {
+        counter.textContent = `${photoGallery.length} fotos`;
+    }
+}
+
+// Cargar fotos al iniciar la aplicación
+document.addEventListener('DOMContentLoaded', function() {
+    loadPhotosFromStorage();
+});
+
+   </script>
+</body>
+</html>
